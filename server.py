@@ -1,9 +1,21 @@
 from flask import Flask, request, Response, jsonify
 from ResourceManager import ResourceManager, ResourceDoesNotExistException
 import json
+import signal
+import sys
 
 resource_manager = ResourceManager()
 
+
+def sigint_handler(sig, frame):
+    print('Shutting down...')
+    resource_manager.shutdown()
+    sys.exit(0)
+
+# register sigint handler
+signal.signal(signal.SIGINT, sigint_handler)
+
+resource_manager.start()
 
 application = Flask(__name__)
 application.config['MAX_CONTENT_LENGTH'] = 536870912 # 1/2 GB

@@ -3,15 +3,15 @@ import os
 import json
 import hashlib
 import time
-import threading
+import multiprocessing
 
-from spatial_access.p2p import TransitMatrix
-from spatial_access.CommunityAnalytics import DestFloatingCatchmentArea
-from spatial_access.CommunityAnalytics import TwoStageFloatingCatchmentArea
-from spatial_access.CommunityAnalytics import AccessTime
-from spatial_access.CommunityAnalytics import AccessCount
-from spatial_access.CommunityAnalytics import AccessModel
-from spatial_access.SpatialAccessExceptions import *
+# from spatial_access.p2p import TransitMatrix
+# from spatial_access.CommunityAnalytics import DestFloatingCatchmentArea
+# from spatial_access.CommunityAnalytics import TwoStageFloatingCatchmentArea
+# from spatial_access.CommunityAnalytics import AccessTime
+# from spatial_access.CommunityAnalytics import AccessCount
+# from spatial_access.CommunityAnalytics import AccessModel
+# from spatial_access.SpatialAccessExceptions import *
 
 
 class ResourceDoesNotExistException(BaseException):
@@ -30,94 +30,101 @@ class UnknownJobTypeException(BaseException):
         return "Unknown job type"
 
 
+class Consumer(multiprocessing.Process):
+
+    def __init__(self, job_queue):
+        multiprocessing.Process.__init__(self)
+        self.job_queue = job_queue
+
+    def run(self):
+        while True:
+            next_job = self.job_queue.get()
+            self.execute_job(next_job)
+            self.job_queue.task_done()
+
+    def run_matrix_job(self, orders, job_filename):
+        pass
+
+    def run_model_job(self, orders, job_filename):
+        pass
+
+    def execute_job(self, job):
+        print('executing job:', job)
+        if not os.path.exists('jobs/'):
+            os.mkdir('jobs/')
+        job_filename = 'jobs/' + job['job_id']
+        os.mkdir(job_filename)
+        job_meta = {}
+        # do the job
+        try:
+            if job['job_type'] == 'matrix':
+                self.run_matrix_job(job['orders'], job_filename)
+            elif job['job_type'] == 'model':
+                self.run_model_job(job['orders'], job_filename)
+            else:
+                job_meta['exception'] = 'unrecognized_job_type'
+        except Exception as exception:
+            job_meta['exception'] = str(exception)
+
+        job_meta['timestamp'] = time.time()
+        with open(job_filename, 'w') as file:
+            json.dump(job_meta, file)
 
 
 class ResourceManager:
-    def __init__(self):
+    def __init__(self, num_processes=2, resource_lifespan=86400, job_lifespan=86400):
         self.allowed_extensions = {'csv', 'png'}
-        self.resource_lifespan = 60 * 60 * 24  # one day
-        self.job_queue = []
-        self.sleep_interval = 1
-        self.current_job = None
-        thread = threading.Thread(target=self.run_job_queue, args=())
-        thread.daemon = True  # Daemonize thread
-        thread.start()  # Start the execution
+        self.resource_lifespan = resource_lifespan
+        self.job_lifespan = job_lifespan
+        self.num_processes = num_processes
+        self.job_queue = None
+        self.consumers = None
 
-    def dispatch_job(self, job):
-        print('job:', job)
-        if not os.path.exists('jobs/'):
-            os.mkdir('jobs/')
-        os.mkdir('jobs/' + job['job_id'])
-        if job['job_type'] == 'model':
-            try:
-                print('model job')
-            except Exception as exception:
-                job['exception'] = str(exception)
-        elif job['job_type'] == 'matrix':
-            try:
-                print('matrix job')
-            except Exception as exception:
-                job['exception'] = exception
-        else:
-            job['exception'] = str(UnknownJobTypeException(job))
-        self.write_job(job)
+    def start(self):
+        self.job_queue = multiprocessing.JoinableQueue()
+        self.consumers = [Consumer(self.job_queue) for _ in range(self.num_processes)]
+        for consumer in self.consumers:
+            consumer.start()
 
-    def write_job(self, job):
-        manifest = self.get_manifest()
-        manifest['jobs'][job['job_id']] = job
-
-        self.write_manifest(manifest)
+    def shutdown(self):
+        for consumer in self.consumers:
+            consumer.terminate()
 
     def get_job_status(self, job_id):
-        if self.current_job and job_id == self.current_job['job_id']:
-            return 'current'
-        elif job_id in self.job_queue:
-            return 'enqueued'
-        else:
-            manifest = self.get_manifest()
-            if job_id in manifest['jobs'].keys():
-                if 'exception' in manifest['jobs'][job_id].keys():
-                    return 'encountered_exception'
-                return 'finished'
-            return 'not_running'
+        pass
 
     def get_job_results(self, job_id):
-        manifest = self.get_manifest()
-        if job_id in manifest['jobs'].keys():
-            return manifest['jobs'][job_id]
+        path = 'jobs/' + job_id
+        if os.path.exists(path):
+            meta_file = path + '/meta.json'
+            return self.load_job_meta(meta_file)
         return None
 
     def add_job_to_queue(self, job):
-        self.job_queue.append(job)
-
-    def cancel_job(self, job_id):
-        index_to_cancel = None
-        for i, job in enumerate(self.job_queue):
-            if job['job_id'] == job_id:
-                index_to_cancel = i
-                break
-        if index_to_cancel:
-            self.job_queue.pop(index_to_cancel)
-            return True
-        return False
+        self.job_queue.put(job)
 
     def delete_job_results(self, job_id):
-        manifest = self.get_manifest()
-        if job_id in manifest['jobs'].keys():
-            os.rmdir('jobs/' + job_id)
-            del manifest['jobs'][job_id]
-            self.write_manifest(manifest)
-            return True
+        path = 'jobs/' + job_id
+        if os.path.exists(path):
+            try:
+                os.removedirs(path)
+                return True
+            except BaseException:
+                return False
         return False
 
-    def run_job_queue(self):
-        while True:
-            if len(self.job_queue) > 0:
-                self.current_job = self.job_queue.pop(0)
-                self.dispatch_job(self.current_job)
-                self.current_job = None
-            else:
-                time.sleep(self.sleep_interval)
+    @staticmethod
+    def load_job_meta(meta_file):
+        if os.path.exists(meta_file):
+            with open(meta_file, 'r') as file:
+                return json.load(file)
+
+    def delete_expired_jobs(self):
+        if os.path.exists('jobs/'):
+            for job_file in os.listdir('jobs/'):
+                job_meta = self.load_job_meta('jobs/' + job_file + '/meta.json')
+                if time.time() - job_meta['timestamp'] > self.job_lifespan:
+                    os.rmdir(job_file)
 
     @staticmethod
     def get_manifest():
@@ -125,7 +132,7 @@ class ResourceManager:
             with open('manifest.json', 'r') as file:
                 return json.load(file)
         else:
-            return {'resources':{}, 'jobs':{}}
+            return {}
 
     @staticmethod
     def write_manifest(manifest):
@@ -156,14 +163,14 @@ class ResourceManager:
     def add_resource(self, resource_id):
         manifest = self.get_manifest()
         resource_hash = self.get_resource_hash(resource_id)
-        manifest['resources'][resource_id] = {'hash': resource_hash, 'timestamp': time.time()}
+        manifest[resource_id] = {'hash': resource_hash, 'timestamp': time.time()}
         self.write_manifest(manifest)
 
     def delete_resource(self, resource_id):
         manifest = self.get_manifest()
-        if resource_id not in manifest['resources'].keys():
+        if resource_id not in manifest.keys():
             raise ResourceDoesNotExistException(resource_id)
-        del manifest['resources'][resource_id]
+        del manifest[resource_id]
         self.write_manifest(manifest)
         try:
             os.remove('resources/' + resource_id)
@@ -178,11 +185,11 @@ class ResourceManager:
 
     def resource_id_exists(self, resource_id):
         manifest = self.get_manifest()
-        return resource_id in manifest['resources'].keys()
+        return resource_id in manifest.keys()
 
     def resource_hash_exists(self, resource_hash):
         manifest = self.get_manifest()
-        for resource_id, resource in manifest['resources'].items():
+        for resource_id, resource in manifest.items():
             if resource['hash'] == resource_hash:
                 return resource_id
         return None
@@ -190,7 +197,7 @@ class ResourceManager:
     def delete_expired_resources(self):
         resources_to_delete = []
         manifest = self.get_manifest()
-        for resource_id, resource_details in manifest['resources'].items():
+        for resource_id, resource_details in manifest.items():
             if time.time() - resource_details['timestamp'] > self.resource_lifespan:
                 resources_to_delete.append(resource_id)
 
