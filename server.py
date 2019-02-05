@@ -3,8 +3,21 @@ from ResourceManager import ResourceManager, ResourceDoesNotExistException
 import json
 import signal
 import sys
+import argparse
 
-resource_manager = ResourceManager()
+parser = argparse.ArgumentParser(description='Start the spatial_access ReST API')
+parser.add_argument('--processes', metavar='-p', type=int, default=2,
+                    help='How many concurrent processes should be allowed to'
+                         'run spatial_access jobs')
+parser.add_argument('--resource_expiration', metavar='-r', type=int,
+                    default=86400, help='After how many seconds should resources be removed?')
+parser.add_argument('--job_expiration', metavar='-j', type=int,
+                    default=86400, help='After how many seconds should job results be removed?')
+args = parser.parse_args()
+
+resource_manager = ResourceManager(num_processes=args.processes,
+                                   resource_lifespan=args.resource_expiration,
+                                   job_lifespan=args.job_expiration)
 
 
 def sigint_handler(sig, frame):
