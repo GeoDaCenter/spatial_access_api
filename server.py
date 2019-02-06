@@ -35,7 +35,7 @@ application.config['MAX_CONTENT_LENGTH'] = 536870912 # 1/2 GB
 application.config['PROPAGATE_EXCEPTIONS'] = True
 
 
-@application.route('/uploadResource', methods=['POST'])
+@application.route('/uploadResource', methods=['PUT'])
 def upload_resource():
     if 'file' not in request.files:
         return Response(status=400)
@@ -51,8 +51,10 @@ def upload_resource():
 @application.route('/checkResourceById/<resource_id>', methods=['GET'])
 def check_resource_by_id(resource_id):
     if resource_manager.resource_id_exists(resource_id=resource_id):
-        return jsonify(exists='yes'), 200
-    return jsonify(exists='no'), 200
+        return jsonify(resource_id=resource_id,
+                       exists='yes'), 200
+    return jsonify(resource_id=resource_id,
+                   exists='no'), 200
 
 
 @application.route('/checkResourceByHash/<resource_hash>', methods=['GET'])
@@ -87,34 +89,35 @@ def submit_job():
 @application.route('/checkJobStatus/<job_id>', methods=['GET'])
 def check_job_status(job_id):
     status = resource_manager.get_job_status(job_id)
-    return jsonify(status=status), 200
+    return jsonify(job_id=job_id,
+                   status=status), 200
 
 
 @application.route('/cancelJob/<job_id>', methods=['POST'])
 def cancel_job(job_id):
     if resource_manager.cancel_job(job_id):
-        return Response(status=200)
-    return Response(status=403)
+        return jsonify(job_id=job_id), 200
+    return jsonify(job_id=job_id), 403
 
 
 @application.route('/deleteJobResults/<job_id>', methods=['DELETE'])
 def delete_job_results(job_id):
     if '/' in job_id:
-        return Response(status=403)
+        return jsonify(job_id=job_id), 403
     if resource_manager.delete_job_results(job_id):
-        return Response(status=200)
-    return Response(status=403)
+        return jsonify(job_id=job_id), 200
+    return jsonify(job_id=job_id), 403
 
 
 @application.route('/getResultsForJob/<job_id>', methods=['GET'])
 def get_results_for_job(job_id):
     job_results = resource_manager.get_job_results(job_id)
     if not job_results:
-        return Response(status=404)
+        return jsonify(job_id=job_id), 404
     elif 'exception' in job_results.keys():
-        return jsonify(exception=job_results['exception']), 500
+        return jsonify(job_id=job_id, exception=job_results['exception']), 500
     else:
-        return Response(status=200)
+        return jsonify(job_id=job_id), 200
 
 if __name__ == "__main__":
     application.run()
