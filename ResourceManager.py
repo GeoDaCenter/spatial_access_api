@@ -4,6 +4,7 @@ import json
 import hashlib
 import time
 import multiprocessing
+import zipfile
 
 from spatial_access.p2p import TransitMatrix
 from spatial_access.CommunityAnalytics import DestFloatingCatchmentArea
@@ -79,8 +80,9 @@ class Consumer(multiprocessing.Process):
             model.plot_cdf(**orders['plot_cdf_kwargs'])
         if 'aggregate_kwargs' in orders:
             aggregated_results = model.aggregate(**orders['aggregate_kwargs'])
-            aggregated_results.to_csv('/aggregated_results.csv')
+            model.write_aggregated_results_to_json(job_filename + 'aggregate.json')
             if 'plot_choropleth_args' in orders:
+
                 model.plot_choropleth(**orders['plot_choroplth_kwargs'])
 
     def execute_job(self, job):
@@ -176,6 +178,30 @@ class ResourceManager:
     @staticmethod
     def get_new_job_id():
         return uuid.uuid4().hex
+
+    @staticmethod
+    def get_zip_filename(job_id):
+        folder = 'jobs/' + job_id + '/'
+        if not os.path.exists(folder):
+            return None
+        zip_filename = job_id + '.zip'
+        zip = zipfile.ZipFile(zip_filename, 'w')
+        for file in os.listdir(folder):
+            if not file.endswith('.zip'):
+                zip.write(folder + file)
+        return zip_filename
+
+    @staticmethod
+    def get_aggregated_data(job_id):
+        filename = 'jobs/' + job_id + '/aggregate.json'
+        if not os.path.exists(filename):
+            return None
+        with open(filename) as file:
+            return json.load(file)
+
+    @staticmethod
+    def job_id_is_safe(job_id):
+        return '/' not in job_id and '.' not in job_id
 
     @staticmethod
     def get_new_resource_id():

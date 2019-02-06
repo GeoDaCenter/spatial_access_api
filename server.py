@@ -1,4 +1,4 @@
-from flask import Flask, request, Response, jsonify
+from flask import Flask, request, Response, jsonify, send_file
 from ResourceManager import ResourceManager, ResourceDoesNotExistException
 import json
 import signal
@@ -93,16 +93,9 @@ def check_job_status(job_id):
                    status=status), 200
 
 
-@application.route('/cancelJob/<job_id>', methods=['POST'])
-def cancel_job(job_id):
-    if resource_manager.cancel_job(job_id):
-        return jsonify(job_id=job_id), 200
-    return jsonify(job_id=job_id), 403
-
-
 @application.route('/deleteJobResults/<job_id>', methods=['DELETE'])
 def delete_job_results(job_id):
-    if '/' in job_id:
+    if not resource_manager.job_id_is_safe(job_id):
         return jsonify(job_id=job_id), 403
     if resource_manager.delete_job_results(job_id):
         return jsonify(job_id=job_id), 200
@@ -111,13 +104,24 @@ def delete_job_results(job_id):
 
 @application.route('/getResultsForJob/<job_id>', methods=['GET'])
 def get_results_for_job(job_id):
-    job_results = resource_manager.get_job_results(job_id)
-    if not job_results:
-        return jsonify(job_id=job_id), 404
-    elif 'exception' in job_results.keys():
-        return jsonify(job_id=job_id, exception=job_results['exception']), 500
-    else:
-        return jsonify(job_id=job_id), 200
+    import pdb; pdb.set_trace()
+    if not resource_manager.job_id_is_safe(job_id):
+        return jsonify(job_id=job_id), 403
+    zip_filename = resource_manager.get_zip_filename(job_id)
+    if zip_filename is not None:
+        return send_file(zip_filename)
+    return jsonify(job_id=job_id), 404
+
+
+@application.route('/getAggregatedResultsForJob/<job_id>', methods=['GET'])
+def get_aggregated_results_for_job(job_id):
+    if not resource_manager.job_id_is_safe(job_id):
+        return jsonify(job_id=job_id), 403
+    results = resource_manager.get_aggregated_data(job_id)
+    if results is not None:
+        return jsonify(results=results), 200
+    return jsonify(job_id=job_id), 404
+
 
 if __name__ == "__main__":
     application.run()
