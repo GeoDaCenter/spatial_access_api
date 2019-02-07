@@ -4,11 +4,10 @@ import hashlib
 from multiprocessing import JoinableQueue
 import zipfile
 import json
+import shutil
 
 from Manifest import Manifest
 from Consumer import Consumer
-
-from ResourceManagerExceptions import ResourceDoesNotExistException
 
 
 class ResourceManager:
@@ -22,6 +21,10 @@ class ResourceManager:
         self.manifest = Manifest()
 
     def start(self):
+        if not os.path.exists('resources/'):
+            os.mkdir('resources/')
+        if not os.path.exists('jobs/'):
+            os.mkdir('jobs/')
         self.job_queue = JoinableQueue()
         self.consumers = [Consumer(self.job_queue, self.manifest) for _ in range(self.num_processes)]
         for consumer in self.consumers:
@@ -30,11 +33,13 @@ class ResourceManager:
     def shutdown(self):
         for consumer in self.consumers:
             consumer.terminate()
+        self._remove_all()
 
     def get_job_status(self, job_id):
         return self.manifest.get_job_status(job_id)
 
     def add_job_to_queue(self, job):
+        self.manifest.add_job(job.job_id)
         self.job_queue.put(job)
 
     def delete_job_results(self, job_id):
@@ -42,7 +47,7 @@ class ResourceManager:
         path = 'jobs/' + job_id
         if os.path.exists(path):
             try:
-                os.rmdir(path)
+                shutil.rmtree(path)
                 return True
             except BaseException:
                 return False
@@ -52,7 +57,7 @@ class ResourceManager:
         expired_resources = self.manifest.delete_expired_resources(self.resource_lifespan)
         for resource_id in expired_resources:
             try:
-                os.rmdir('resources/' + resource_id)
+                shutil.rmtree('resources/' + resource_id)
             except:
                 pass
 
@@ -60,20 +65,17 @@ class ResourceManager:
         expired_jobs = self.manifest.delete_expired_jobs(self.job_lifespan)
         for job_id in expired_jobs:
             try:
-                os.rmdir('jobs/' + job_id)
+                shutil.rmtree('jobs/' + job_id)
             except:
                 pass
-
-    @staticmethod
-    def get_new_job_id():
-        return uuid.uuid4().hex
 
     @staticmethod
     def get_zip_filename(job_id):
         folder = 'jobs/' + job_id + '/'
         if not os.path.exists(folder):
             return None
-        zip_filename = job_id + '.zip'
+
+        zip_filename = folder + job_id + '.zip'
         zip = zipfile.ZipFile(zip_filename, 'w')
         for file in os.listdir(folder):
             if not file.endswith('.zip'):
@@ -117,9 +119,11 @@ class ResourceManager:
 
     def delete_resource(self, resource_id):
         self.manifest.delete_resource(resource_id)
-        if not os.path.exists('resources/' + resource_id):
-            raise ResourceDoesNotExistException(resource_id)
-        os.remove('resources/' + resource_id)
+        filepath = 'resources/' + resource_id
+        if not os.path.exists(filepath):
+            return False
+        os.remove(filepath)
+        return True
 
     def extension_is_allowed(self, filename):
         if '.' not in filename:
@@ -132,3 +136,10 @@ class ResourceManager:
 
     def resource_hash_exists(self, resource_hash):
         return self.manifest.resource_hash_exists(resource_hash)
+
+    def _remove_all(self):
+        self.manifest.clear()
+        shutil.rmtree('resources/')
+        shutil.rmtree('jobs/')
+        if os.path.exists('data/'):
+            shutil.rmtree('data/')

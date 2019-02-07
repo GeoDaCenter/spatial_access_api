@@ -14,11 +14,13 @@ class Manifest:
                 try:
                     manifest = json.load(file)
                 except:
-                    manifest = {}
+                    manifest = {'resources':{},
+                    'jobs':{}}
                 self.lock.release()
                 return manifest
         else:
-            return {}
+            return {'resources':{},
+                    'jobs':{}}
 
     def _write(self, manifest):
         with open('manifest.json', 'w') as file:
@@ -28,6 +30,9 @@ class Manifest:
             except:
                 pass
             self.lock.release()
+
+    def clear(self):
+        os.remove('manifest.json')
 
     def add_resource(self, resource_id, resource_hash):
         manifest = self._load()
@@ -61,7 +66,7 @@ class Manifest:
 
     def resource_exists(self, resource_id):
         manifest = self._load()
-        return resource_id not in manifest['resources'].keys()
+        return resource_id in manifest['resources'].keys()
 
     def resource_hash_exists(self, resource_hash):
         manifest = self._load()
@@ -72,7 +77,7 @@ class Manifest:
 
     def job_exists(self, job_id):
         manifest = self._load()
-        return job_id not in manifest['jobs'].keys()
+        return job_id in manifest['jobs'].keys()
 
     def get_job_status(self, job_id):
         manifest = self._load()
@@ -84,9 +89,9 @@ class Manifest:
         manifest = self._load()
         if job_id not in manifest['jobs'].keys():
             return None
-        if 'exception_message' not in manifest['jobs']['job_id'].keys():
+        if 'exception_message' not in manifest['jobs'][job_id].keys():
             return None
-        return manifest['jobs']['job_id']['exception_message']
+        return manifest['jobs'][job_id]['exception_message']
 
     def update_job_status(self, job_id, status):
         manifest = self._load()

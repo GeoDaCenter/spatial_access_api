@@ -1,6 +1,6 @@
 from flask import Flask, request, Response, jsonify, send_file
 from ResourceManager import ResourceManager
-import json
+from Job import Job
 import signal
 import sys
 import argparse
@@ -48,7 +48,7 @@ def upload_resource():
         return Response(status=403)
     file.save("resources/" + resource_id)
     resource_manager.add_resource(resource_id)
-    return jsonify(file_id=resource_id), 201
+    return jsonify(resource_id=resource_id), 201
 
 
 @application.route('/checkResourceById/<resource_id>', methods=['GET'])
@@ -80,20 +80,24 @@ def delete_resource(resource_id):
 
 @application.route('/submitJob', methods=['POST'])
 def submit_job():
-    if 'job' in request.values:
-        job = json.loads(request.values.to_dict()['job'])
-        job_id = resource_manager.get_new_job_id()
-        job['job_id'] = job_id
-        resource_manager.add_job_to_queue(job)
-        return jsonify(job_id=job_id), 200
-    return Response(status=400)
+    job = Job(request.values)
+    if job.error_status is not None:
+        return jsonify(error=job.error_status), 400
+    resource_manager.add_job_to_queue(job)
+    return jsonify(job_id=job.job_id), 200
 
 
 @application.route('/checkJobStatus/<job_id>', methods=['GET'])
 def check_job_status(job_id):
-    status = resource_manager.get_job_status(job_id)
-    return jsonify(job_id=job_id,
-                   status=status), 200
+    if not resource_manager.manifest.job_exists(job_id):
+        return jsonify(job_id=job_id), 404
+    job_status = resource_manager.get_job_status(job_id)
+    if job_status == 'exception' or job_status == 'failed':
+        exception_message  = resource_manager.manifest.get_job_exception_message(job_id)
+        return jsonify(job_id=job_id,
+                       job_status=job_status,
+                       exception_message=exception_message), 500
+    return jsonify(job_id=job_id, job_status=job_status), 200
 
 
 @application.route('/deleteJobResults/<job_id>', methods=['DELETE'])
