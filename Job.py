@@ -50,6 +50,18 @@ class Job:
         else:
             self.secondary_resource = None
 
+        # if job_type is model, both primary and secondary_resource are required
+        self.model_type = None
+        if self.job_type == 'model':
+            if 'model_type' not in job_request.keys():
+                self.error_status = 'model_type not specified'
+                return
+            else:
+                self.model_type = job_request['model_type']
+            if not self.primary_resource or not self.secondary_resource:
+                self.error_status = 'two resources required for model job'
+                return
+
         # generate a new uuid
         self.job_id = self.get_new_job_id()
         self.job_folder = 'jobs/' + self.job_id + '/'

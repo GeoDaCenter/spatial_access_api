@@ -32,7 +32,8 @@ class Manifest:
             self.lock.release()
 
     def clear(self):
-        os.remove('manifest.json')
+        if os.path.exists('manifest.json'):
+            os.remove('manifest.json')
 
     def add_resource(self, resource_id, resource_hash):
         manifest = self._load()

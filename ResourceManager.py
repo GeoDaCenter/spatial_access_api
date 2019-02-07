@@ -142,4 +142,5 @@ class ResourceManager:
         shutil.rmtree('resources/')
         shutil.rmtree('jobs/')
         if os.path.exists('data/'):
-            shutil.rmtree('data/')
+            if os.path.exists('data/osm_query_cache'):
+                shutil.rmtree('data/osm_query_cache')

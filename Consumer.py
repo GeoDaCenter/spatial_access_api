@@ -45,39 +45,35 @@ class Consumer(Process):
 
     @staticmethod
     def run_model_job(job):
-        if 'source_resource_id' not in job.orders['init_kwargs']:
-            raise MissingResourceException('source_resource_id')
-        elif 'dest_resource_id' not in job.orders['init_kwargs']:
-            raise MissingResourceException('dest_resource_id')
-        job.orders['init_kwargs']['source_resource'] = 'resources/' + job.orders['init_kwargs']['source_resource_id']
-        job.orders['init_kwargs']['dest_resource'] = 'resources/' + job.orders['init_kwargs']['dest_resource_id']
+
+        job.orders['init_kwargs']['sources_filename'] = job.primary_resource
+        job.orders['init_kwargs']['destinations_filename'] = job.secondary_resource
+        print('model job init_kwargs:', job.orders['init_kwargs'])
         if 'source_column_names' not in job.orders['init_kwargs']:
             raise MissingColumnNamesException('source_column_names')
         if 'dest_column_names' not in job.orders['init_kwargs']:
             raise MissingColumnNamesException('dest_column_names')
-        if job.orders['model_type'] == 'DestFloatingCatchmentArea':
+        if job.model_type == 'DestFloatingCatchmentArea':
             model = DestFloatingCatchmentArea(**job.orders['init_kwargs'])
-        elif job.orders['model_type'] == 'TwoStageFloatingCatchmentArea':
+        elif job.model_type == 'TwoStageFloatingCatchmentArea':
             model = TwoStageFloatingCatchmentArea(**job.orders['init_kwargs'])
-        elif job.orders['model_type'] == 'AccessTime':
+        elif job.model_type == 'AccessTime':
             model = AccessTime(**job.orders['init_kwargs'])
-        elif job.orders['model_type'] == 'AccessCount':
+        elif job.model_type == 'AccessCount':
             model = AccessCount(**job.orders['init_kwargs'])
-        elif job.orders['model_type'] == 'AccessModel':
+        elif job.model_type == 'AccessModel':
             model = AccessModel(**job.orders['init_kwargs'])
         else:
             raise UnrecognizedJobTypeException(job.orders['model_type'])
+        print('calculate_kwargs:', job.orders['calculate_kwargs'])
         model.calculate(**job.orders['calculate_kwargs'])
         model_results = model.get_results()
         model_results.to_csv(job.job_folder + '/results.csv')
-        if 'plot_cdf_kwargs' in job.orders:
-            model.plot_cdf(**job.orders['plot_cdf_kwargs'])
+        print('wrote results')
         if 'aggregate_kwargs' in job.orders:
-            aggregated_results = model.aggregate(**job.orders['aggregate_kwargs'])
-            model.write_aggregated_results_to_json(job.job_folder + 'aggregate.json')
-            if 'plot_choropleth_args' in job.orders:
-
-                model.plot_choropleth(**job.orders['plot_choroplth_kwargs'])
+            print('aggregate_kwargs:', job.orders['aggregate_kwargs'])
+            job.orders['aggregate_kwargs']['output_filename'] = job.job_folder + '/aggregate.json'
+            model.aggregate(**job.orders['aggregate_kwargs'])
 
     def execute_job(self, job):
         print('executing job:', job.job_id)
@@ -86,14 +82,15 @@ class Consumer(Process):
         if job.job_type == 'matrix':
             try:
                 self.run_matrix_job(job)
-            except:
-                self.manifest.add_job_exception(job.job_id, "failed")
+            except Exception as exception:
+                print('exception:',str(exception))
+                self.manifest.add_job_exception(job.job_id, str(exception))
                 return
         elif job.job_type == 'model':
             try:
                 self.run_model_job(job)
-            except:
-                self.manifest.add_job_exception(job.job_id, "failed")
+            except Exception as exception:
+                self.manifest.add_job_exception(job.job_id, str(exception))
                 return
         else:
             self.manifest.add_job_exception(job.job_id, 'unknown_job_type')

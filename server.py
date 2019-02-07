@@ -6,8 +6,8 @@ import sys
 import argparse
 
 parser = argparse.ArgumentParser(description='Start the spatial_access ReST API')
-parser.add_argument('--processes', metavar='-p', type=int, default=2,
-                    help='How many concurrent processes should be allowed to'
+parser.add_argument('--num_workers', metavar='-w', type=int, default=2,
+                    help='How many concurrent workers should be allowed to'
                          'run spatial_access jobs')
 parser.add_argument('--resource_expiration', metavar='-r', type=int,
                     default=86400, help='Expiration (in seconds) of resources.')
@@ -15,9 +15,12 @@ parser.add_argument('--job_expiration', metavar='-j', type=int,
                     default=86400, help='Expiration (in seconds) of job results.')
 parser.add_argument('--max_file_size', metavar='-m', type=int,
                     default=536870912, help='Max file size (in bytes) to allow users to upload.')
+parser.add_argument('--port', metavar='-p', type=int,
+                    default=5000, help='Port number to listen on.')
+parser.add_argument('--deploy', action='store_true', help='Deploy to accept incoming connections.')
 args = parser.parse_args()
 
-resource_manager = ResourceManager(num_processes=args.processes,
+resource_manager = ResourceManager(num_processes=args.num_workers,
                                    resource_lifespan=args.resource_expiration,
                                    job_lifespan=args.job_expiration)
 
@@ -135,4 +138,8 @@ def get_aggregated_results_for_job(job_id):
 
 
 if __name__ == "__main__":
-    application.run()
+    if args.deploy:
+        hostname='0.0.0.0'
+    else:
+        hostname = '127.0.0.1'
+    application.run(host=hostname, port=args.port)
