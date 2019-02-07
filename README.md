@@ -19,8 +19,10 @@ https://github.com/GeoDaCenter/spatial_access
 
 # Run
 
-`python3 server.py [--processes] [--resource_expiration] [--job_expiration]`
-
+`usage: server.py [-h] [--num_workers -w] [--resource_expiration -r]
+                 [--job_expiration -j] [--max_file_size -m] [--port -p]
+                 [--deploy]
+`
 
 # Endpoints
 
@@ -136,14 +138,6 @@ https://github.com/GeoDaCenter/spatial_access
 
 **Response**: `{}`
 
-#### OR
-
-**Status Code**: `500`
-
-**Reason**: Server encountered an exception while processing job
-
-**Response**: `{'exception':exception_message}`
-
 ## getResultsForJob
 
 **URL** `/getResultsForJob/<job_id>`
@@ -159,6 +153,14 @@ https://github.com/GeoDaCenter/spatial_access
 **Reason**: Returned job results
 
 **Response**: `{'job_id':job_id, '''results':{...}}`
+
+#### OR
+
+**Status Code**: `403`
+
+**Reason**: Illegal `job_id`
+
+**Response**: `{'job_id':job_id}`
 
 #### OR
 
@@ -190,31 +192,9 @@ https://github.com/GeoDaCenter/spatial_access
 
 **Reason**: Job status returned
 
-**Response**: `{'job_id':job_id, 'status':'enqueued' | 'not_found' | 'completed'}`
-
-## cancelJob
-
-**URL** `/cancelJob/<job_id>`
-
-**Method**: `POST`
-
-**Expects**: `{}`
-
-### Responses
-
-**Status Code**: `200`
-
-**Reason**: Job cancelled
-
-**Response**: `{'job_id':job_id}`
-
-#### OR
-
-**Status Code**: `403`
-
-**Reason**: Illegal request
-
-**Response**: `{'job_id':job_id}`
+**Response**: `{'job_id':job_id, 
+                'status':'enqueued' | 'not_found' | 'finished' | 'exception',
+                'exception_message': message}`
 
 ## deleteJobResults
 
