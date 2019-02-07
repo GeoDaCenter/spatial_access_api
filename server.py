@@ -1,5 +1,5 @@
 from flask import Flask, request, Response, jsonify, send_file
-from ResourceManager import ResourceManager, ResourceDoesNotExistException
+from ResourceManager import ResourceManager
 import json
 import signal
 import sys
@@ -10,9 +10,11 @@ parser.add_argument('--processes', metavar='-p', type=int, default=2,
                     help='How many concurrent processes should be allowed to'
                          'run spatial_access jobs')
 parser.add_argument('--resource_expiration', metavar='-r', type=int,
-                    default=86400, help='After how many seconds should resources be removed?')
+                    default=86400, help='Expiration (in seconds) of resources.')
 parser.add_argument('--job_expiration', metavar='-j', type=int,
-                    default=86400, help='After how many seconds should job results be removed?')
+                    default=86400, help='Expiration (in seconds) of job results.')
+parser.add_argument('--max_file_size', metavar='-m', type=int,
+                    default=536870912, help='Max file size (in bytes) to allow users to upload.')
 args = parser.parse_args()
 
 resource_manager = ResourceManager(num_processes=args.processes,
@@ -25,13 +27,14 @@ def sigint_handler(sig, frame):
     resource_manager.shutdown()
     sys.exit(0)
 
+
 # register sigint handler
 signal.signal(signal.SIGINT, sigint_handler)
 
 resource_manager.start()
 
 application = Flask(__name__)
-application.config['MAX_CONTENT_LENGTH'] = 536870912 # 1/2 GB
+application.config['MAX_CONTENT_LENGTH'] = args.max_file_size
 application.config['PROPAGATE_EXCEPTIONS'] = True
 
 
@@ -59,19 +62,19 @@ def check_resource_by_id(resource_id):
 
 @application.route('/checkResourceByHash/<resource_hash>', methods=['GET'])
 def check_resource_by_hash(resource_hash):
-    if resource_manager.resource_hash_exists(resource_hash=resource_hash):
-        return jsonify(exists='yes'), 200
-    return jsonify(exists='no'), 200
+    resource_id = resource_manager.resource_hash_exists(resource_hash=resource_hash)
+    if resource_id:
+        return jsonify(resource_id=resource_id), 200
+    return Response(404)
 
 
 @application.route('/deleteResource/<resource_id>', methods=['DELETE'])
 def delete_resource(resource_id):
-    if '/' in resource_id:
+    if not resource_manager.job_id_is_safe(resource_id):
         return Response(status=403)
-    try:
-        resource_manager.delete_resource(resource_id)
+    if resource_manager.delete_resource(resource_id):
         return Response(status=200)
-    except ResourceDoesNotExistException:
+    else:
         return Response(status=403)
 
 
@@ -96,17 +99,21 @@ def check_job_status(job_id):
 @application.route('/deleteJobResults/<job_id>', methods=['DELETE'])
 def delete_job_results(job_id):
     if not resource_manager.job_id_is_safe(job_id):
-        return jsonify(job_id=job_id), 403
+        return Response(status=403)
     if resource_manager.delete_job_results(job_id):
-        return jsonify(job_id=job_id), 200
-    return jsonify(job_id=job_id), 403
+        return Response(status=200)
+    else:
+        return Response(status=403)
 
 
 @application.route('/getResultsForJob/<job_id>', methods=['GET'])
 def get_results_for_job(job_id):
-    import pdb; pdb.set_trace()
     if not resource_manager.job_id_is_safe(job_id):
         return jsonify(job_id=job_id), 403
+    job_status = resource_manager.get_job_status(job_id)
+    if job_status == 'exception':
+        exception_message  = resource_manager.manifest.get_job_exception_message(job_id)
+        return jsonify(job_id=job_id, exception_message=exception_message), 500
     zip_filename = resource_manager.get_zip_filename(job_id)
     if zip_filename is not None:
         return send_file(zip_filename)
