@@ -41,8 +41,9 @@ application.config['MAX_CONTENT_LENGTH'] = args.max_file_size
 application.config['PROPAGATE_EXCEPTIONS'] = True
 
 
-@application.route('/uploadResource', methods=['PUT'])
+@application.route('/uploadResource', methods=['POST'])
 def upload_resource():
+
     if 'file' not in request.files:
         return Response(status=400)
     resource_id = resource_manager.get_new_resource_id()

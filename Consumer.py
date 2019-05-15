@@ -2,11 +2,12 @@ from multiprocessing import Process
 import os
 
 from spatial_access.p2p import TransitMatrix
-from spatial_access.CommunityAnalytics import DestFloatingCatchmentArea
-from spatial_access.CommunityAnalytics import TwoStageFloatingCatchmentArea
-from spatial_access.CommunityAnalytics import AccessTime
-from spatial_access.CommunityAnalytics import AccessCount
-from spatial_access.CommunityAnalytics import AccessModel
+from spatial_access.Models import TSFCA
+from spatial_access.Models import Coverage
+from spatial_access.Models import DestSum
+from spatial_access.Models import AccessTime
+from spatial_access.Models import AccessCount
+from spatial_access.Models import AccessModel
 
 from ResourceManagerExceptions import UnrecognizedJobTypeException
 from ResourceManagerExceptions import MissingHintsException
@@ -53,10 +54,12 @@ class Consumer(Process):
             raise MissingColumnNamesException('source_column_names')
         if 'dest_column_names' not in job.orders['init_kwargs']:
             raise MissingColumnNamesException('dest_column_names')
-        if job.model_type == 'DestFloatingCatchmentArea':
-            model = DestFloatingCatchmentArea(**job.orders['init_kwargs'])
-        elif job.model_type == 'TwoStageFloatingCatchmentArea':
-            model = TwoStageFloatingCatchmentArea(**job.orders['init_kwargs'])
+        if job.model_type == 'TSFCA':
+            model = TSFCA(**job.orders['init_kwargs'])
+        elif job.model_type == 'Coverage':
+            model = Coverage(**job.orders['init_kwargs'])
+        elif job.model_type == 'DestSum':
+            model = DestSum(**job.orders['init_kwargs'])
         elif job.model_type == 'AccessTime':
             model = AccessTime(**job.orders['init_kwargs'])
         elif job.model_type == 'AccessCount':
@@ -67,13 +70,13 @@ class Consumer(Process):
             raise UnrecognizedJobTypeException(job.orders['model_type'])
         print('calculate_kwargs:', job.orders['calculate_kwargs'])
         model.calculate(**job.orders['calculate_kwargs'])
-        model_results = model.get_results()
-        model_results.to_csv(job.job_folder + '/results.csv')
+        if model.model_results is not None:
+            model.write_results(job.job_folder + '/results.csv')
         print('wrote results')
         if 'aggregate_kwargs' in job.orders:
             print('aggregate_kwargs:', job.orders['aggregate_kwargs'])
-            job.orders['aggregate_kwargs']['output_filename'] = job.job_folder + '/aggregate.json'
             model.aggregate(**job.orders['aggregate_kwargs'])
+            model.write_aggregated_results(job.job_folder + '/aggregate.json')
 
     def execute_job(self, job):
         print('executing job:', job.job_id)
