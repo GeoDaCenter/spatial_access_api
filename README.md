@@ -30,7 +30,7 @@ https://github.com/GeoDaCenter/spatial_access
 
 **URL** `/uploadResource`
 
-**Method**: `PUT`
+**Method**: `POST`
 
 **Expects**: `{'file':file}`
 

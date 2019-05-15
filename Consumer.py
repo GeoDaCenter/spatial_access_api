@@ -2,11 +2,12 @@ from multiprocessing import Process
 import os
 
 from spatial_access.p2p import TransitMatrix
-from spatial_access.CommunityAnalytics import DestFloatingCatchmentArea
-from spatial_access.CommunityAnalytics import TwoStageFloatingCatchmentArea
-from spatial_access.CommunityAnalytics import AccessTime
-from spatial_access.CommunityAnalytics import AccessCount
-from spatial_access.CommunityAnalytics import AccessModel
+from spatial_access.Models import TSFCA
+from spatial_access.Models import Coverage
+from spatial_access.Models import DestSum
+from spatial_access.Models import AccessTime
+from spatial_access.Models import AccessCount
+from spatial_access.Models import AccessModel
 
 from ResourceManagerExceptions import UnrecognizedJobTypeException
 from ResourceManagerExceptions import MissingHintsException
